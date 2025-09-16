@@ -1,6 +1,6 @@
 ## POI Extraction from Google Maps
 
-This tool collects Points of Interest (POIs) from Google Maps for a list of municipalities, retrieves full metadata for each POI via the official Google Places API (New, v1), and exports an Excel workbook with one sheet per municipality.
+This tool collects Points of Interest (POIs) from Google Maps for GeoJSON extents, retrieves full metadata for each POI via the official Google Places API (New, v1), and exports an Excel workbook with one sheet per input file.
 
 ### Features
 - Grid-tiles the area (per municipal polygon) and runs v1 Nearby Search (`places:searchNearby`) to cover POIs
@@ -33,20 +33,12 @@ cp env.example .env
 Edit `.env` to set `GOOGLE_MAPS_API_KEY`.
 
 ### Input
-- Provide one GeoJSON per extent (recommended), or a directory of GeoJSON files. Each file becomes one output sheet named after the file (without extension). Files may contain multiple polygons; they will be unioned. You can also pass a single FeatureCollection file (then you’ll get a sheet per feature property `name` only if you split into separate files).
-
-Example `municipalities.txt`:
-
-```text
-Milan
-Rome
-Florence
-```
+- Provide one GeoJSON per extent (recommended), or a directory of GeoJSON files. Each file becomes one output sheet named after the file (without extension). Files may contain multiple polygons; they will be unioned. You can also pass a single FeatureCollection file (this will produce a single sheet named after the file).
 
 ### Usage
 
 ```bash
-# Single FeatureCollection (still supported but single sheet)
+# Single FeatureCollection (supported, produces one sheet)
 python poi_extraction.py \
   --output pois.xlsx \
   --radius-m 1500 \
@@ -65,22 +57,7 @@ python poi_extraction.py \
   --extent-geojson data/muni_geojsons/
 ```
 
-#### With polygons (recommended for full coverage)
-
-- Put your polygons in `data/municipalities.geojson` (recommended path) as a GeoJSON FeatureCollection.
-- Ensure each feature has a name property matching your municipality list. By default the property is `name`. Use `--name-field` to change.
-
-Example with polygons:
-
-```bash
-python poi_extraction.py \
-  --output pois.xlsx \
-  --radius-m 1500 \
-  --extent-geojson data/municipalities.geojson \
-  --name-field name
-```
-
-Minimal feature structure:
+Minimal FeatureCollection structure (example):
 
 ```json
 {
@@ -100,8 +77,7 @@ Key arguments:
 - `--radius-m`: Nearby Search radius in meters per grid point (default: 1500)
 - `--grid-overlap`: Overlap factor for grid spacing (default: 1.3). Effective spacing is `radius_m / grid_overlap`.
 - `--max-workers`: Max parallel requests for Place Details (default: 10)
-- `--extent-geojson`: Path to GeoJSON FeatureCollection with municipal polygons (recommended: `data/municipalities.geojson`)
-- `--name-field`: Property name on features that contains the municipality name (default: `name`)
+- `--extent-geojson`: One or more GeoJSON paths or a directory; each file becomes one sheet (supports multi-polygons)
 
 ### Notes and Limits
 - This tool uses the official Google Places API (New, v1). Ensure you comply with Google Maps Platform Terms of Service and your billing/quota limits.
@@ -109,12 +85,15 @@ Key arguments:
 - The script requests an extensive set of Place Details fields and serializes nested structures (lists/dicts) as JSON strings so that "all metadata" is preserved in the spreadsheet.
 
 ### Output
-- An Excel workbook where each municipality has its own sheet. Columns are derived from flattened Place Details (nested objects/arrays are JSON strings).
+- An Excel workbook where each input file becomes its own sheet. Columns are derived from flattened Place Details (nested objects/arrays are JSON strings).
 
 #### Sheet naming and file mapping
 - When you pass multiple files or a directory via `--extent-geojson`, the tool creates one sheet per file.
 - The sheet name equals the file name without extension (e.g., `misiliscemi.geojson` → sheet `misiliscemi`).
 - Each file can contain multiple polygons; they are unioned before gridding to ensure full coverage for that sheet.
+
+#### RunInfo sheet
+- The workbook includes a `RunInfo` sheet with metadata: start/end time, duration, number of files, radius, overlap, type filter, language, worker count, API base, Python/pandas/requests versions, Shapely availability, sources, and a per-sheet summary table (grid points, place_ids collected, details fetched).
 
 ### Troubleshooting
 - If you see `REQUEST_DENIED` or `OVER_QUERY_LIMIT`, confirm your key, quotas, and API enablement. The script retries with exponential backoff for transient errors.
